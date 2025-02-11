@@ -40,13 +40,13 @@ add_executable(Konewka Konewka.c )
 pico_set_program_name(Konewka "Konewka")
 pico_set_program_version(Konewka "0.1")
 
+
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(Konewka 0)
 pico_enable_stdio_usb(Konewka 0)
 
 # Add the standard library to the build
-target_link_libraries(Konewka
-        pico_stdlib)
+target_link_libraries(Konewka pico_stdlib pico_cyw43_arch_none)
 
 # Add the standard include files to the build
 target_include_directories(Konewka PRIVATE

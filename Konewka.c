@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
+#include "pico/cyw43_arch.h"
 
 
 //Pins
@@ -21,6 +22,13 @@ void setup(){
     gpio_init(VALVE_PIN);
     gpio_set_dir(VALVE_PIN, GPIO_OUT);
     gpio_put(VALVE_PIN,0); //Closed by default
+}
+
+void init_wifi(){
+    if(cyw43_arch_init()){
+        return;
+    }
+    cyw43_arch_deinit();
 }
 
 int read_moisture(){
