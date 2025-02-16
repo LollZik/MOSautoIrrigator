@@ -50,7 +50,7 @@ int main(){
     while (true) {
         int moisture = read_moisture();
         watering_controls(moisture);
-        sleep_ms(1800000); //Potential watering once every 30min - its still more often than required. Although idk how often pico will need to 
+        sleep_ms(1800000); // 30 min
     }
 
     return 0;
