@@ -63,19 +63,19 @@ void setup_udp(){
 void update_display(int moisture, int valve_status){\
     char text[64];
     snprintf(text, sizeof(text), "Moisture:%d\nValve: %d",moisture,valve_status ? "OPEN" : "CLOSED");
-    eink_clear();
-    eink_draw_text(text);
-    eink_refresh();
+    // eink_clear();
+    // eink_draw_text(text);
+    // eink_refresh();
 }
 
 int main(){
     stdio_init_all();
-    eink_init();
+    //eink_init();
     wifi_init();
     setup_udp();
 
     while (true){
-        receive_data();
+        //receive_data();
         update_display(600, 1);
         sleep_ms(1800000);
 

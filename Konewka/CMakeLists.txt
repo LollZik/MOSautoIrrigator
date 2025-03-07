@@ -25,8 +25,9 @@ endif()
 # ====================================================================================
 set(PICO_BOARD pico_w CACHE STRING "Board type")
 
-# Pull in Raspberry Pi Pico SDK (must be before project)
-include(pico_sdk_import.cmake)
+# Pull in Raspberry Pi Pico SDK (must be before project). Here it searches for it in Home file
+set(PICO_SDK_PATH "$ENV{HOME}/pico-sdk")
+include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(Konewka C CXX ASM)
 
@@ -54,9 +55,7 @@ target_include_directories(Konewka PRIVATE
 )
 
 # Add any user requested libraries
-target_link_libraries(Konewka 
-        
-        )
+target_link_libraries(Konewka)
 
 pico_add_extra_outputs(Konewka)
 
