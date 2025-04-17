@@ -17,13 +17,14 @@ void epd_init(){
 
     epd_send_command(0x11);  // Data entry mode
     epd_send_data(0x03);     // Y increment, X increment
-    epd_send_data(0x00);     // increment in X direction
+    epd_send_data(0x00);     // AM = "0" X-Mode
 
 
 //  Resolution
     epd_send_command(0x44);  // Set RAM X adress
     epd_send_data(0x00);     // XStart = 0
     epd_send_data(0x3F);     // XEnd = 63
+
     epd_send_command(0x45);  // Set RAM Y adress
     epd_send_data(0x00);     // YStart = 0
     epd_send_data(0xFF);     // YEnd = 255
@@ -31,9 +32,17 @@ void epd_init(){
     epd_send_command(0x3C);  // Border Waveform Control (Panel border)
     epd_send_data(0x51);     // Fix level voltage
     
-    //To do: Load Waveform LUT
+//  Load waveform LUT
+    epd_send_command(0x18);  // Read from temperature register
+    epd_send_data(0x80);
 
-    sleep_ms(10);
+    epd_send_command(0x22);  // Display Update Control
+    epd_send_data(0xB1);     // Load LUT from OTP
+
+    epd_send_command(0x20);  // Execute Display Update Sequence
+    epd_wait_until_idle();
+
+//  Initialization finished, ready for image display  
 }
 
 void epd_reset(){
@@ -68,24 +77,38 @@ void epd_display_image(const uint8_t *image, uint16_t width, uint16_t height){
     uint16_t bytes_per_line = width/8;
 
 
-    //epd_send_command(0x4F); // Set RAM Y adress counter
-    //epd_send_command(0x4C); // Set RAM X adress counter
+    //EPD_CLEAR()
 
-    epd_send_command(0x24);  // Write RAM (Black&White)
-    // 1 == Write  0 == Black  
-    
+    epd_send_command(0x4E); // Set RAM X adress counter
+    epd_send_data(0x00);
+
+    epd_send_command(0x4F); // Set RAM Y adress counter
+    epd_send_data(0x00);
+
+    epd_send_command(0x24);  // Write RAM (Black & White only)    
+
 
     for(uint16_t y = 0; y < height ; y++){
         for(uint16_t x = 0; x < bytes_per_line; x++){
             epd_send_data(image[y * bytes_per_line + x]);
         }
-    }
+    }  
+    sleep_ms(10);
+    
+  
+    epd_send_command(0x0C); //Softstart
+    epd_send_data(0xD7);
+    epd_send_data(0xD6);
+    epd_send_data(0x9D);
 
-    //epd_send_command(0x0C); // Softstart
+    //Update
     epd_send_command(0x22); // Display Update Control
-    epd_send_data(0xF7);
-    epd_send_command(0x20); // Master Activation (start refreshing)
-
+    epd_send_data(0xC7);    // Display Refresh
+    epd_send_command(0x20); // Master activation
     epd_wait_until_idle();
+}
+
+void epd_clear(){
+    
 }
 
