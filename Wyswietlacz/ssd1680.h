@@ -1,5 +1,5 @@
 #ifndef SSD1680_H
-#define SSD180_H
+#define SSD1680_H
 
 #include "pico/stdlib.h"
 

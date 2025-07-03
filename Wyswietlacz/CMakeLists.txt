@@ -1,34 +1,57 @@
 cmake_minimum_required(VERSION 3.13)
 
+
+# Languages standards
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Generate compile_commands.json for VS Code
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(PICO_BOARD pico_w CACHE STRING "Board type")
 
-set(PICO_SDK_PATH "$ENV{HOME}/pico-sdk")
-include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
-
+# Import and initialize Pico SDK
+include(pico_sdk_import.cmake)
 project(Wyswietlacz C CXX ASM)
-
 pico_sdk_init()
 
-add_executable(Wyswietlacz Wyswietlacz.c ssd1680.c)
 
+# SSD1680 (e-ink)
+add_library(ssd1680 STATIC ssd1680.c)
+
+target_include_directories(ssd1680 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(ssd1680 
+    pico_stdlib
+    hardware_spi
+    )
+
+
+# Main program
+add_executable(Wyswietlacz
+    Wyswietlacz.c
+)
+
+# Name and version of the project
 pico_set_program_name(Wyswietlacz "Wyswietlacz")
 pico_set_program_version(Wyswietlacz "0.1")
 
-
+# turn off UART/USB stdio
 pico_enable_stdio_uart(Wyswietlacz 0)
 pico_enable_stdio_usb(Wyswietlacz 0)
 
-include_directories(${PICO_SDK_PATH}/src)
-
-
-target_link_libraries(Wyswietlacz pico_stdlib hardware_spi pico_cyw43_arch_none)
-
-target_include_directories(Wyswietlacz PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
+# Link all the libraries
+target_link_libraries(Wyswietlacz
+    pico_stdlib
+    hardware_spi
+    ssd1680
 )
+
+# Link wifi library
+if (PICO_CYW43_SUPPORTED)
+    target_link_libraries(Wyswietlacz pico_cyw43_arch_none)
+endif()
+
+# .uf2, .bin, .hex
+pico_add_extra_outputs(Wyswietlacz)
