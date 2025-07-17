@@ -53,5 +53,9 @@ if (PICO_CYW43_SUPPORTED)
     target_link_libraries(Wyswietlacz pico_cyw43_arch_none)
 endif()
 
+target_include_directories(Wyswietlacz PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}
+)
+
 # .uf2, .bin, .hex
 pico_add_extra_outputs(Wyswietlacz)

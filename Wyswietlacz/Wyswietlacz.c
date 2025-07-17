@@ -9,7 +9,7 @@
 #define EINK_BUSY 14 
 
 #define WIFI_SSID "PicoNet"
-#define WIFI_PASS "12345678"`
+#define WIFI_PASS "12345678"
 #define UDP_PORT 12345
 
 struct udp_pcb *udp_conn;
