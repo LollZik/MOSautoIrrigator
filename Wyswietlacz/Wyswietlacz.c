@@ -1,7 +1,11 @@
 #include <stdio.h>
-#include <pico/stdlib.h>
-#include <hardware/spi.h>
-#include <pico/cyw43_arch.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "pico/cyw43_arch.h"
+#include "hardware/spi.h"
+#include "lwip/udp.h"
+#include "lwip/ip_addr.h"
+#include "lwip/pbuf.h"
 
 #define EINK_CS 17
 #define EINK_DC 16
@@ -9,10 +13,11 @@
 #define EINK_BUSY 14 
 
 #define WIFI_SSID "PicoNet"
-#define WIFI_PASS "12345678"
-#define UDP_PORT 12345
+#define WIFI_PASSWORD "MosKonewka"
+#define LISTEN_PORT 12345
+#define MAX_MSG_LEN 64
 
-struct udp_pcb *udp_conn;
+static struct udp_pcb *udp_server;
 
 void eink_init(){
     spi_init(spi0, 2 * 1000 * 1000);
@@ -29,34 +34,41 @@ void eink_init(){
     gpio_set_dir(EINK_BUSY, GPIO_IN);
 }
 
-void wifi_init(){
-    if(cyw43_arch_init()){
-        return;
+bool setup_wifi(){
+    if(cyw43_arch_init_with_country(CYW43_COUNTRY_POLAND)){
+        printf("Wifi initialization error\n");
+        return false;
     }
     cyw43_arch_enable_sta_mode();
+    if(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID,WIFI_PASSWORD,CYW43_AUTH_WPA2_AES_PSK,30000)){
+        printf("Connection failed\n");
+        return false;
+    }
+    printf("Connected\n");
+    return true;
 }
 
-void udp_recv_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t addr, u16_t port){
-    if (p != NULL){
-        char buf[32] = {0};
-        pbuf_copy_partial(p, buf, sizeof(buf)-1, 0);
-        pbuf_free(p);
+static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port){
+    char buf[MAX_MSG_LEN+1];
+    int len = p->len < MAX_MSG_LEN ? p->len : MAX_MSG_LEN;
+    memcpy(buf, p->payload, len);
+    buf[len]='\0';
 
-        int moisture = 0, valve_state = 0;
-        if (sscanf(buf, "Moisture:%d Valve:%d",&moisture, &valve_state) == 2){
-            printf("Moisture:%d Valve:%d",moisture, valve_state);
-            update_display(moisture, valve_state);
-        }
-    }
+    // E-ink
+
+    pbuf_free(p);
 }
 
-void setup_udp(){
-    udp_conn = udp_new();
-    if(!udp_conn){
-        return;
+bool setup_udp(){
+    udp_server = udp_new();
+    if(!udp_server){
+        return false;
     }
-    udp_bind(udp_conn, IP_ADDR_ANY, UDP_PORT);
-    udp_recv(udp_conn, udp_recv_callback, NULL);
+    if(udp_bind(udp_server, IP_ADDR_ANY, LISTEN_PORT) != ERR_OK){
+        return false;
+    }
+    udp_recv(udp_server, udp_receive_callback, NULL);
+    return true;
 }
 
 
@@ -70,15 +82,19 @@ void update_display(int moisture, int valve_status){\
 
 int main(){
     stdio_init_all();
+
+    if(!setup_wifi){
+        return -1;
+    }
+    if(!setup_udp){
+        return -1;
+    }
     eink_init();
-    wifi_init();
-    setup_udp();
 
     while (true){
-        receive_data();
-        update_display(600, 1);
-        sleep_ms(1800000);
-
+       // Messages received via UDP are handled automatically because of 
+       // threadsafe_background mode, and e-ink is automatically updated
+       // inside the udp_receive_callback function, therefore while loop is empty
     }
     return 0;
 }
