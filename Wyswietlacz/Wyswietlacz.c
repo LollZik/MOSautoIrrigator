@@ -32,6 +32,7 @@ void eink_init(){
     gpio_set_dir(EINK_CS, GPIO_OUT);
     gpio_set_dir(EINK_RST, GPIO_OUT);
     gpio_set_dir(EINK_BUSY, GPIO_IN);
+    epd_init();
 }
 
 bool setup_wifi(){

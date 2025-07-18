@@ -3,6 +3,33 @@
 #include "pico/stdlib.h"
 
 
+void epd_reset(){
+    gpio_put(EPD_RST,0);
+    sleep_ms(10);
+    gpio_put(EPD_RST,1);
+    sleep_ms(10);
+}
+
+void epd_wait_until_idle(){
+    while (gpio_get(EPD_BUSY) == 1){
+        sleep_ms(10);
+    }
+}
+
+void epd_send_command(uint8_t command){
+    gpio_put(EPD_DC,0);
+    gpio_put(EPD_CS,0);
+    spi_write_blocking(spi0, &command, 1);
+    gpio_put(EPD_CS,1);
+}
+
+void epd_send_data(uint8_t data){
+    gpio_put(EPD_DC, 1);
+    gpio_put(EPD_CS, 0);
+    spi_write_blocking(spi0, &data, 1);
+    gpio_put(EPD_CS, 1);
+}
+
 void epd_init(){
     epd_reset();
     epd_wait_until_idle();
@@ -41,35 +68,6 @@ void epd_init(){
 
     epd_send_command(0x20);  // Execute Display Update Sequence
     epd_wait_until_idle();
-
-//  Initialization finished, ready for image display  
-}
-
-void epd_reset(){
-    gpio_put(EPD_RST,0);
-    sleep_ms(10);
-    gpio_put(EPD_RST,1);
-    sleep_ms(10);
-}
-
-void epd_wait_until_idle(){
-    while (gpio_get(EPD_BUSY) == 1){
-        sleep_ms(10);
-    }
-}
-
-void epd_send_command(uint8_t command){
-    gpio_put(EPD_DC,0);
-    gpio_put(EPD_CS,0);
-    spi_write_blocking(spi0, &command, 1);
-    gpio_put(EPD_CS,1);
-}
-
-void epd_send_data(uint8_t data){
-    gpio_put(EPD_DC, 1);
-    gpio_put(EPD_CS, 0);
-    spi_write_blocking(spi0, &data, 1);
-    gpio_put(EPD_CS, 1);
 }
 
 
