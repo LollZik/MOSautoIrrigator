@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <ssd1680.h>
+#include <text_renderer.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "hardware/spi.h"
@@ -49,17 +51,6 @@ bool setup_wifi(){
     return true;
 }
 
-static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port){
-    char buf[MAX_MSG_LEN+1];
-    int len = p->len < MAX_MSG_LEN ? p->len : MAX_MSG_LEN;
-    memcpy(buf, p->payload, len);
-    buf[len]='\0';
-
-    // E-ink
-
-    pbuf_free(p);
-}
-
 bool setup_udp(){
     udp_server = udp_new();
     if(!udp_server){
@@ -72,9 +63,32 @@ bool setup_udp(){
     return true;
 }
 
+static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port){
+    char buf[MAX_MSG_LEN+1];
+    int len = p->len < MAX_MSG_LEN ? p->len : MAX_MSG_LEN;
+    memcpy(buf, p->payload, len);
+    buf[len]='\0';
 
-void update_display(int moisture, int valve_status){\
-    char text[64];
+    // E-ink
+
+    pbuf_free(p);
+}
+
+void generate_text_bitmap(int moisture, bool valve){
+    text_renderer_init(); // Clear framebuff first
+
+    char line1[32];
+    char line2[32];
+    snprintf(line1, sizeof(line1), "Moisture: %d", moisture);
+    snprintf(line2, sizeof(line2),"Valve: %s", valve ? "ON" : "OFF");
+    draw_string(0,0, line1);
+    draw_string(0, 10, line2);
+    epd_display_image(framebuf);
+}
+
+
+   char text[64];
+ void update_display(int moisture, int valve_status){\
     snprintf(text, sizeof(text), "Moisture:%d\nValve: %d",moisture,valve_status ? "OPEN" : "CLOSED");
      eink_clear();
      eink_draw_text(text);

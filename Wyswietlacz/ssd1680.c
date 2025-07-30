@@ -78,8 +78,8 @@ void epd_init(){
 }
 
 
-void epd_display_image(const uint8_t *image, uint16_t width, uint16_t height){
-    uint16_t bytes_per_line = width/8;
+void epd_display_image(const uint8_t *image){
+    uint16_t bytes_per_line = WIDTH/8;
 
 
     //EPD_CLEAR()
@@ -93,7 +93,7 @@ void epd_display_image(const uint8_t *image, uint16_t width, uint16_t height){
     epd_send_command(0x24);  // Write RAM (Black & White only)    
 
 
-    for(uint16_t y = 0; y < height ; y++){
+    for(uint16_t y = 0; y < HEIGHT ; y++){
         for(uint16_t x = 0; x < bytes_per_line; x++){
             epd_send_data(image[y * bytes_per_line + x]);
         }
