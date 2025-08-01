@@ -42,8 +42,8 @@ void epd_init(){
     epd_send_command(0x01);  // Driver output control
     // Display's height
     uint16_t m = HEIGHT - 1;
-    uint8_t mux_lsb =  m        & 0xFF;
-    uint8_t mux_msb = (m >> 8)  & 0x01;
+    uint8_t mux_lsb =  m & 0xFF;
+    uint8_t mux_msb = (m >> 8) & 0x01;
     epd_send_data(mux_lsb);
     epd_send_data(mux_msb);
     epd_send_data(0x00);     // Default input direction
@@ -78,42 +78,38 @@ void epd_init(){
 }
 
 
-void epd_display_image(const uint8_t *image){
-    uint16_t bytes_per_line = WIDTH/8;
+void epd_display_image(const uint8_t *framebuf){
+    uint16_t bytes_per_line = (WIDTH+7)/8;
 
+    // Set RAM pointers to 0
 
-    //EPD_CLEAR()
-
-    epd_send_command(0x4E); // Set RAM X adress counter
+    epd_send_command(0x4E); // Set RAM X adress
     epd_send_data(0x00);
 
-    epd_send_command(0x4F); // Set RAM Y adress counter
+    epd_send_command(0x4F); // Set RAM Y adress
     epd_send_data(0x00);
+    epd_send_data(0x00);    // 8th byte
 
-    epd_send_command(0x24);  // Write RAM (Black & White only)    
-
+    epd_send_command(0x24);  // Write to RAM (Black & White only)    
 
     for(uint16_t y = 0; y < HEIGHT ; y++){
         for(uint16_t x = 0; x < bytes_per_line; x++){
-            epd_send_data(image[y * bytes_per_line + x]);
+            epd_send_data(framebuf[y * bytes_per_line + x]);
         }
     }  
     sleep_ms(10);
-    
   
     epd_send_command(0x0C); //Softstart
-    epd_send_data(0xD7);
-    epd_send_data(0xD6);
-    epd_send_data(0x9D);
+    epd_send_data(0xD7);    // Gate driving voltage
+    epd_send_data(0xD6);    // Source driving voltage
+    epd_send_data(0x9D);    // VCOM voltage
+    epd_send_data(0x00);    // Optionally: softstart timing control (zależnie od modułu)
 
-    //Update
+
+    //Update the display
     epd_send_command(0x22); // Display Update Control
-    epd_send_data(0xC7);    // Display Refresh
+    epd_send_data(0xC7);    // Full update
     epd_send_command(0x20); // Master activation
     epd_wait_until_idle();
-}
-
-void epd_clear(){
-    
 }
 

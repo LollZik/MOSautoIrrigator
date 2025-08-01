@@ -54,7 +54,7 @@ static void set_pixel(int x, int y){
     if( x < 0 || x >= EPD_WIDTH  ||  y < 0 || y >= EPD_HEIGHT) return;
     int idx = y * X_BYTES + (x >> 3);
     int bit = 7 - (x & 7);
-    framebuf[idx] &= ~(1 << bit);
+     framebuf[idx] &= ~(1 << bit);
 }
 
 
