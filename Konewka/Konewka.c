@@ -61,8 +61,8 @@ bool watering_controls(int moisture){
 }
 
 void send_udp_data(int moisture, int valve_state){
-    char msg[64];
-    int len = snprintf(msg, sizeof(msg), "Moisture = %d, Valve = %d", moisture, valve_state);
+    char msg[32];
+    int len = snprintf(msg, sizeof(msg),"%d,%d", moisture, valve_state);
 
     struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, len, PBUF_RAM);
     if (!p) return;

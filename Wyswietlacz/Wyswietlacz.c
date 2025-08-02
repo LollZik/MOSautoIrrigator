@@ -17,7 +17,7 @@
 #define WIFI_SSID "PicoNet"
 #define WIFI_PASSWORD "MosKonewka"
 #define LISTEN_PORT 12345
-#define MAX_MSG_LEN 64
+#define MAX_MSG_LEN 32
 
 static struct udp_pcb *udp_server;
 
@@ -69,7 +69,15 @@ static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     memcpy(buf, p->payload, len);
     buf[len]='\0';
 
-    // E-ink
+    int moisture = 0;
+    int valve_state = 0;
+    if(sscanf(buf, "%d,%d", &moisture, &valve_state) == 2){
+        generate_text_bitmap(moisture, valve_state != 0);
+    }
+    else{
+        text_renderer_init();
+        draw_string(0,0,"Error");
+    }
 
     pbuf_free(p);
 }
@@ -84,15 +92,6 @@ void generate_text_bitmap(int moisture, bool valve){
     draw_string(0,0, line1);
     draw_string(0, 10, line2);
     epd_display_image(framebuf);
-}
-
-
-   char text[64];
- void update_display(int moisture, int valve_status){\
-    snprintf(text, sizeof(text), "Moisture:%d\nValve: %d",moisture,valve_status ? "OPEN" : "CLOSED");
-     eink_clear();
-     eink_draw_text(text);
-     eink_refresh();
 }
 
 int main(){
@@ -113,4 +112,3 @@ int main(){
     }
     return 0;
 }
-
