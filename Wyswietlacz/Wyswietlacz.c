@@ -51,16 +51,17 @@ bool setup_wifi(){
     return true;
 }
 
-bool setup_udp(){
-    udp_server = udp_new();
-    if(!udp_server){
-        return false;
-    }
-    if(udp_bind(udp_server, IP_ADDR_ANY, LISTEN_PORT) != ERR_OK){
-        return false;
-    }
-    udp_recv(udp_server, udp_receive_callback, NULL);
-    return true;
+
+void generate_text_bitmap(int moisture, bool valve){
+    text_renderer_init(); // Clear framebuff first
+
+    char line1[32];
+    char line2[32];
+    snprintf(line1, sizeof(line1), "Moisture: %d", moisture);
+    snprintf(line2, sizeof(line2),"Valve: %s", valve ? "ON" : "OFF");
+    draw_string(0,0, line1);
+    draw_string(0, 10, line2);
+    epd_display_image(framebuf);
 }
 
 static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port){
@@ -82,16 +83,16 @@ static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     pbuf_free(p);
 }
 
-void generate_text_bitmap(int moisture, bool valve){
-    text_renderer_init(); // Clear framebuff first
-
-    char line1[32];
-    char line2[32];
-    snprintf(line1, sizeof(line1), "Moisture: %d", moisture);
-    snprintf(line2, sizeof(line2),"Valve: %s", valve ? "ON" : "OFF");
-    draw_string(0,0, line1);
-    draw_string(0, 10, line2);
-    epd_display_image(framebuf);
+bool setup_udp(){
+    udp_server = udp_new();
+    if(!udp_server){
+        return false;
+    }
+    if(udp_bind(udp_server, IP_ADDR_ANY, LISTEN_PORT) != ERR_OK){
+        return false;
+    }
+    udp_recv(udp_server, udp_receive_callback, NULL);
+    return true;
 }
 
 int main(){

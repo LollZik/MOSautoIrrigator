@@ -14,10 +14,10 @@ extern uint8_t framebuf[X_BYTES * Y_LINES];
 
 
 // Initialize text renderer
-void text_renderer_init(void);
+static void text_renderer_init(void);
 
 // Draw a single charatcer
-void draw(int x, int y, char c);
+static void draw_char(int x, int y, char c);
 
 // Draw a null-terminated string starting at (x0,y0) - supports '\n'
 static void draw_string(int x0, int y0, const char *s);

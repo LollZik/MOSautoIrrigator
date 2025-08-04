@@ -31,20 +31,11 @@ project(Wyswietlacz C CXX ASM)
 pico_sdk_init()
 
 
-# SSD1680 (e-ink)
-add_library(ssd1680 STATIC ssd1680.c)
-
-target_include_directories(ssd1680 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-
-target_link_libraries(ssd1680 
-    pico_stdlib
-    hardware_spi
-    )
-
-
 # Main program
 add_executable(Wyswietlacz
     Wyswietlacz.c
+    ssd1680.c
+    text_renderer.c
 )
 
 # Name and version of the project
@@ -61,7 +52,6 @@ target_link_libraries(Wyswietlacz
     hardware_spi
     hardware_gpio
     pico_cyw43_arch_lwip_threadsafe_background
-    ssd1680
 )
 
 target_include_directories(Wyswietlacz PRIVATE
