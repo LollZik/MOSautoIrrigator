@@ -1,16 +1,23 @@
 #include <string.h>
 #include <stdio.h>
 #include "pico/stdlib.h"
-#include "hardware/adc.h"
+#include "hardware/spi.h"
 #include "hardware/gpio.h"
 #include "pico/cyw43_arch.h"
 #include "lwip/pbuf.h"
 #include "lwip/udp.h"
 #include "lwip/ip_addr.h"
 
+// SPI
+#define SPI_PORT        spi0
+#define PIN_SCK         2
+#define PIN_MOSI        3
+#define PIN_MISO        4
+#define PIN_CS          5
+
+
 //Watering
-#define MOISTURE_SENSOR_PIN 26
-#define VALVE_PIN 2
+#define VALVE_PIN 7
 #define MOISTURE_THRESHOLD 500 //0-4095
 #define WATERING_TIME 1000
 #define SLEEP_TIME 1800000 // 30 min
@@ -26,9 +33,30 @@ static struct udp_pcb *udp_client;
 static ip_addr_t dest_addr;
 
 
-void setup_adc(){
-    adc_init();
-    adc_gpio_init(MOISTURE_SENSOR_PIN);
+void setup_adc(){ // Project uses external ADC, communitacion via SPI
+    spi_init(SPI_PORT, 2 * 1000 * 1000);
+    gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
+    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
+
+    gpio_init(PIN_CS);
+    gpio_set_dir(PIN_CS, GPIO_OUT);
+    gpio_put(PIN_CS, 1);
+}
+
+int read_adc(uint8_t channel){
+        uint8_t tx[3] = {
+            0x01, // Start bit
+            (uint8_t)(0x80 | ((channel & 0x07) << 4)), // Single-ended mode + channel selection
+            0x00}; // Any value
+
+        uint8_t rx[3] = {0};
+
+        gpio_put(PIN_CS,0);
+        spi_write_read_blocking(SPI_PORT, tx, rx, 3);
+        gpio_put(PIN_CS,1);
+
+        return ((rx[1] & 0x03) << 8) | rx[2];
 }
 
 bool setup_wifi(){
@@ -46,8 +74,7 @@ bool setup_wifi(){
 }
 
 int read_moisture(){
-    adc_select_input(0);
-    return (uint16_t) adc_read();
+    return (int)read_adc(0);
 }
 
 bool watering_controls(int moisture){

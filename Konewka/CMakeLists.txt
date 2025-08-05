@@ -38,7 +38,7 @@ pico_enable_stdio_uart(Konewka 0)
 pico_enable_stdio_usb(Konewka 0)
 
 # Add the standard library to the build
-target_link_libraries(Konewka pico_stdlib hardware_adc)
+target_link_libraries(Konewka pico_stdlib hardware_adc hardware_spi)
 
 # Link wifi library
 if (PICO_CYW43_SUPPORTED)
