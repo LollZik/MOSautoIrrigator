@@ -92,35 +92,23 @@ static void draw_char(int x, int y, char c){
     }
 }
 
-#define LOGO_W        96
-#define LOGO_H        32
-#define EPD_WIDTH     250
-#define EPD_HEIGHT    122
-
-const int PIXEL_OFFSET  = (EPD_WIDTH  - LOGO_W);
-const int BYTE_OFFSET   = PIXEL_OFFSET / 8;            
-const int BIT_OFFSET    = PIXEL_OFFSET % 8;
-const int LOGO_X_BYTES  = (LOGO_W) / 8;
-const int Y_OFFSET      = EPD_HEIGHT - LOGO_H;
+#define LOGO_WIDTH 96
+#define LOGO_HEIGHT 32
+#define LOGO_X_BYTES LOGO_WIDTH
+#define LOGO_Y_BYTES (LOGO_HEIGHT / 8) // 4 "rzędy bajtów"
+#define LOGO_SIZE (LOGO_X_BYTES * LOGO_Y_BYTES)
 
 
+static void draw_logo() {
+    int y_offset = EPD_HEIGHT - LOGO_HEIGHT;
 
-static void draw_logo(void) {
-
-    for (int row = 0; row < LOGO_H; row++) {
-
-        int base = (Y_OFFSET + row) * X_BYTES + BYTE_OFFSET;
-    
-        for (int j = 0; j < LOGO_X_BYTES; j++) {
-            uint8_t src = logo[row * LOGO_X_BYTES + j];
-
-            if (BIT_OFFSET == 0) {
-
-                framebuf[base + j] = src;
-            } else {
-                // MSB to [base+j], LSB to [base+j+1]
-                framebuf[base + j]     = (uint8_t)(src >> BIT_OFFSET);
-                framebuf[base + j + 1] = (uint8_t)(src << (8 - BIT_OFFSET));
+    for (int y_byte = 0; y_byte < LOGO_Y_BYTES; y_byte++) {
+        for (int x = 0; x < LOGO_WIDTH; x++) {
+            uint8_t byte = logo[y_byte * LOGO_WIDTH + x];
+            for (int bit = 0; bit < 8; bit++) {
+                if ((byte >> bit) & 1) {
+                    set_pixel(x, y_offset + y_byte * 8 + bit);
+                }
             }
         }
     }
@@ -143,7 +131,7 @@ static void draw_string(int x0, int y0, const char *s){
     }
 }
 
-// Tests
+//Tests
 
 // int main() {
     
@@ -151,7 +139,7 @@ static void draw_string(int x0, int y0, const char *s){
 
 //     int x = 0, y = 0;
 //     for (int i = 0; i < FONT_COUNT; i++) {
-//         /
+        
 //         if (y > (EPD_HEIGHT - 7)) break;
 
 //         draw_char(x, y, font5x7[i].c);

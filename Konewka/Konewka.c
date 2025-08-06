@@ -34,7 +34,7 @@ static ip_addr_t dest_addr;
 
 
 void setup_adc(){ // Project uses external ADC, communitacion via SPI
-    spi_init(SPI_PORT, 2 * 1000 * 1000);
+    spi_init(SPI_PORT, 2 * 1000 * 1000); // 2MHz
     gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
