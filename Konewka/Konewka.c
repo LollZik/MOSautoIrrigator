@@ -10,10 +10,10 @@
 
 // SPI
 #define SPI_PORT        spi0
-#define PIN_SCK         2
-#define PIN_MOSI        3
-#define PIN_MISO        4
-#define PIN_CS          5
+#define PIN_CS          4
+#define PIN_MOSI        5
+#define PIN_MISO        6
+#define PIN_SCK         7
 
 
 //Watering

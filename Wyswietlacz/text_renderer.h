@@ -19,6 +19,9 @@ static void text_renderer_init(void);
 // Draw a single charatcer
 static void draw_char(int x, int y, char c);
 
+// Draw SKN MOS logo in the bottom of the EPD
+static void draw_logo();
+
 // Draw a null-terminated string starting at (x0,y0) - supports '\n'
 static void draw_string(int x0, int y0, const char *s);
 

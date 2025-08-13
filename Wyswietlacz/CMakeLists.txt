@@ -51,6 +51,7 @@ target_link_libraries(Wyswietlacz
     pico_stdlib
     hardware_spi
     hardware_gpio
+    hardware_pwm
     pico_cyw43_arch_lwip_threadsafe_background
 )
 

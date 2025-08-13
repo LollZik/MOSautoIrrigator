@@ -5,6 +5,8 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "hardware/spi.h"
+#include "hardware/gpio.h"
+#include "hardware/pwm.h"
 #include "lwip/udp.h"
 #include "lwip/ip_addr.h"
 #include "lwip/pbuf.h"
@@ -19,7 +21,18 @@
 #define LISTEN_PORT 12345
 #define MAX_MSG_LEN 32
 
+#define BUZZER_PIN 10
+#define BUTTON_PIN 11
+#define BUTTON_DEBOUNCE_MS 50
+#define BUZZ_FREQ 2000
+#define BUZZ_DUTY_PC 50
+#define BUZZ_TIME_MS 10000
+
 static struct udp_pcb *udp_server;
+
+static volatile bool buzzer_active = false;
+static uint64_t buzzer_start_ms = 0;
+
 
 void eink_init(){
     spi_init(spi0, 2 * 1000 * 1000);
@@ -37,6 +50,23 @@ void eink_init(){
     epd_init();
 }
 
+void buzzer_init(){
+    gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
+    uint slice = pwm_gpio_to_slice_num(BUZZER_PIN);
+    
+    uint16_t wrap = 1249;
+    pwm_set_wrap(slice, wrap);
+    pwm_set_clkdiv(slice, 50.0f);
+
+    pwm_set_chan_level(slice, pwm_gpio_to_channel(BUZZER_PIN),0);
+    pwm_set_enabled(slice, false);
+
+}
+
+void buzzer_start(){
+    
+}
+
 bool setup_wifi(){
     if(cyw43_arch_init_with_country(CYW43_COUNTRY_POLAND)){
         printf("Wifi initialization error\n");
@@ -52,6 +82,8 @@ bool setup_wifi(){
 }
 
 
+
+
 void generate_text_bitmap(int moisture, bool valve){
     text_renderer_init(); // Clear framebuff first
 
@@ -61,6 +93,7 @@ void generate_text_bitmap(int moisture, bool valve){
     snprintf(line2, sizeof(line2),"Valve: %s", valve ? "ON" : "OFF");
     draw_string(0,0, line1);
     draw_string(0, 10, line2);
+    draw_logo();
     epd_display_image(framebuf);
 }
 
@@ -74,6 +107,11 @@ static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     int valve_state = 0;
     if(sscanf(buf, "%d,%d", &moisture, &valve_state) == 2){
         generate_text_bitmap(moisture, valve_state != 0);
+
+        if(valve_state){
+            buzzer_start();
+        }
+
     }
     else{
         text_renderer_init();
