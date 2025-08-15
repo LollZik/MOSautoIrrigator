@@ -34,6 +34,7 @@ static volatile bool buzzer_active = false;
 static uint64_t buzzer_start_ms = 0;
 
 
+// =============== E-ink =============================
 void eink_init(){
     spi_init(spi0, 2 * 1000 * 1000);
     gpio_set_function(18, GPIO_FUNC_SPI); // SCK
@@ -50,6 +51,22 @@ void eink_init(){
     epd_init();
 }
 
+void generate_text_bitmap(int moisture, bool valve){
+    text_renderer_init(); // Clear framebuff first
+
+    char line1[32];
+    char line2[32];
+    snprintf(line1, sizeof(line1), "Moisture: %d", moisture);
+    snprintf(line2, sizeof(line2),"Valve: %s", valve ? "ON" : "OFF");
+    draw_string(0,0, line1);
+    draw_string(0, 10, line2);
+    draw_logo();
+    epd_display_image(framebuf);
+}
+
+
+
+// =============== Buzzer =============================
 void buzzer_init(){
     gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
     uint slice = pwm_gpio_to_slice_num(BUZZER_PIN);
@@ -64,9 +81,67 @@ void buzzer_init(){
 }
 
 void buzzer_start(){
-    
+    uint64_t now_ms = time_us_64() / 1000ULL;
+    buzzer_start_ms = now_ms;
+
+    if(!buzzer_active){
+        buzzer_active = true;
+        uint slice = pwm_gpio_to_slice_num(BUZZER_PIN);
+        uint16_t wrap = pwm_get_wrap(slice);
+
+        uint32_t level = (wrap+1) * BUZZ_DUTY_PC / 100;
+        pwm_set_chan_level(slice, pwm_gpio_to_channel(BUZZER_PIN), level);
+        pwm_set_enabled(slice, true);
+    }
 }
 
+void stop_buzzer(){
+    uint slice = pwm_gpio_to_slice_num(BUZZER_PIN);
+    pwm_set_enabled(slice, false);
+    pwm_set_chan_level(slice, pwm_gpio_to_channel(BUZZER_PIN), 0);
+    buzzer_active = false;
+    buzzer_start_ms = 0;
+}
+
+// =============== Button =============================
+
+void button_init(){
+    gpio_init(BUTTON_PIN);
+    gpio_set_dir(BUTTON_PIN, GPIO_IN);
+    gpio_pull_up(BUTTON_PIN);           // Active low button
+}
+
+bool button_pressed(){
+    static int last_stable_state = 1;
+    static uint64_t last_change_ms = 0;
+    static bool reported = false;
+
+    int raw = gpio_get(BUTTON_PIN);
+    uint64_t now_ms = time_us_64() / 1000ULL;
+
+    if(raw != last_stable_state){
+       // State has changed, reset debouncing timer
+       last_change_ms = now_ms;
+       last_stable_state = raw;
+       reported = false;
+       return false; 
+    }
+    else{
+        if(now_ms - last_change_ms >= BUTTON_DEBOUNCE_MS){
+            if(raw == 0 && !reported){
+                reported = true;
+                return true;
+            }
+            else if(raw == 1){
+                reported = false;
+            }
+        }
+        return false;
+    }
+}
+
+
+// =============== WIFI & UDP =============================
 bool setup_wifi(){
     if(cyw43_arch_init_with_country(CYW43_COUNTRY_POLAND)){
         printf("Wifi initialization error\n");
@@ -82,20 +157,6 @@ bool setup_wifi(){
 }
 
 
-
-
-void generate_text_bitmap(int moisture, bool valve){
-    text_renderer_init(); // Clear framebuff first
-
-    char line1[32];
-    char line2[32];
-    snprintf(line1, sizeof(line1), "Moisture: %d", moisture);
-    snprintf(line2, sizeof(line2),"Valve: %s", valve ? "ON" : "OFF");
-    draw_string(0,0, line1);
-    draw_string(0, 10, line2);
-    draw_logo();
-    epd_display_image(framebuf);
-}
 
 static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port){
     char buf[MAX_MSG_LEN+1];
@@ -144,10 +205,14 @@ int main(){
     }
     eink_init();
 
+    buzzer_init();
+    button_init();
+
     while (true){
        // Messages received via UDP are handled automatically because of 
        // threadsafe_background mode, and e-ink is automatically updated
-       // inside the udp_receive_callback function, therefore while loop is empty
+       // inside the udp_receive_callback function,
+       // therefore while true loop only needs to handle the buzzer  
     }
     return 0;
 }
