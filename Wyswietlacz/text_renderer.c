@@ -217,29 +217,3 @@ static void printInTerminal(){
         putchar('\n');
     }
 }
-
-//Tests
-
-int main() {
-    
-    text_renderer_init();
-
-    int x = 0, y = 0;
-    for (int i = 0; i < FONT_COUNT; i++) {
-        
-        if (y > (EPD_HEIGHT - 7)) break;
-
-        draw_char(x, y, font5x7[i].c);
-
-        x += 8;
-        if (x > 120) {
-            x = 0;
-            y += 8;
-        }
-    }
-    draw_logo();
-
-    printInTerminal();
-
-    return 0;
-}

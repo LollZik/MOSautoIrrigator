@@ -24,14 +24,13 @@
 #define BUZZER_PIN 10
 #define BUTTON_PIN 11
 #define BUTTON_DEBOUNCE_MS 50
-#define BUZZ_FREQ 2000
 #define BUZZ_DUTY_PC 50
 #define BUZZ_TIME_MS 10000
 
 static struct udp_pcb *udp_server;
 
 static volatile bool buzzer_active = false;
-static uint64_t buzzer_start_ms = 0;
+static volatile uint32_t buzzer_end_ms = 0;
 
 
 // =============== E-ink =============================
@@ -81,8 +80,8 @@ void buzzer_init(){
 }
 
 void buzzer_start(){
-    uint64_t now_ms = time_us_64() / 1000ULL;
-    buzzer_start_ms = now_ms;
+    uint32_t now_ms = time_us_64() / 1000ULL;
+    buzzer_end_ms = now_ms + BUZZ_TIME_MS;
 
     if(!buzzer_active){
         buzzer_active = true;
@@ -100,7 +99,7 @@ void stop_buzzer(){
     pwm_set_enabled(slice, false);
     pwm_set_chan_level(slice, pwm_gpio_to_channel(BUZZER_PIN), 0);
     buzzer_active = false;
-    buzzer_start_ms = 0;
+    buzzer_end_ms = 0;
 }
 
 // =============== Button =============================
@@ -113,11 +112,11 @@ void button_init(){
 
 bool button_pressed(){
     static int last_stable_state = 1;
-    static uint64_t last_change_ms = 0;
+    static uint32_t last_change_ms = 0;
     static bool reported = false;
 
     int raw = gpio_get(BUTTON_PIN);
-    uint64_t now_ms = time_us_64() / 1000ULL;
+    uint32_t now_ms = time_us_64() / 1000ULL;
 
     if(raw != last_stable_state){
        // State has changed, reset debouncing timer
@@ -197,10 +196,10 @@ bool setup_udp(){
 int main(){
     stdio_init_all();
 
-    if(!setup_wifi){
+    if(!setup_wifi()){
         return -1;
     }
-    if(!setup_udp){
+    if(!setup_udp()){
         return -1;
     }
     eink_init();
@@ -212,7 +211,22 @@ int main(){
        // Messages received via UDP are handled automatically because of 
        // threadsafe_background mode, and e-ink is automatically updated
        // inside the udp_receive_callback function,
-       // therefore while true loop only needs to handle the buzzer  
+       // therefore while true loop only needs to handle the buzzer
+
+        if(buzzer_active){ 
+            uint32_t now = (uint32_t) (time_us_64()/1000UL);
+
+            if((int32_t)(now - buzzer_end_ms) >= 0){
+                stop_buzzer();
+            }
+            else if(button_pressed()){
+                stop_buzzer();
+            }
+        }
+        else{
+            (void)button_pressed(); // Update static variables inside the function
+        }
+        sleep_ms(10); // Slight delay so as not to overload the system
     }
     return 0;
 }
