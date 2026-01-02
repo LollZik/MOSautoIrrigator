@@ -5,8 +5,8 @@
 #include <stdbool.h>
 
 // Dimensions of the e-ink display
-#define EPD_WIDTH    250
-#define EPD_HEIGHT   122
+#define EPD_WIDTH    128
+#define EPD_HEIGHT   250
 #define X_BYTES      ((EPD_WIDTH + 7) / 8)
 #define Y_LINES      (EPD_HEIGHT)
 
@@ -14,15 +14,15 @@ extern uint8_t framebuf[X_BYTES * Y_LINES];
 
 
 // Initialize text renderer
-static void text_renderer_init(void);
+void text_renderer_init(void);
 
 // Draw a single charatcer
-static void draw_char(int x, int y, char c);
+void draw_char(int x, int y, char c);
 
 // Draw SKN MOS logo in the bottom of the EPD
-static void draw_logo();
+void draw_logo();
 
 // Draw a null-terminated string starting at (x0,y0) - supports '\n'
-static void draw_string(int x0, int y0, const char *s);
+void draw_string(int x0, int y0, const char *s);
 
 #endif

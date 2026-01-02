@@ -1,115 +1,96 @@
 #include "ssd1680.h"
 #include "hardware/spi.h"
 #include "pico/stdlib.h"
+#include <stdio.h>
+#include <string.h>
 
-#define HEIGHT 122
-#define WIDTH 250
+
+#define HEIGHT 250
+#define WIDTH 128
+
+uint8_t buf[0x1200];
 
 void epd_reset(){
-    gpio_put(EPD_RST,0);
+    gpio_put(RST_PIN,0);
     sleep_ms(10);
-    gpio_put(EPD_RST,1);
+    gpio_put(RST_PIN,1);
     sleep_ms(10);
 }
 
 void epd_wait_until_idle(){
-    while (gpio_get(EPD_BUSY) == 1){
+    while (gpio_get(BUSY_PIN)){
         sleep_ms(10);
     }
 }
+    
+void spi_ink_write_data(uint8_t cmd, uint8_t *data, uint16_t d_len) {
 
-void epd_send_command(uint8_t command){
-    gpio_put(EPD_DC,0);
-    gpio_put(EPD_CS,0);
-    spi_write_blocking(spi0, &command, 1);
-    gpio_put(EPD_CS,1);
+  gpio_put(EINK_CS_PIN, 0);
+  gpio_put(DC_PIN, 0);
+
+  spi_write_blocking(spi0, &cmd, 1);
+
+  gpio_put(DC_PIN, 1);
+
+  spi_write_blocking(spi0, data, d_len);
+
+  gpio_put(DC_PIN, 0);
+  gpio_put(EINK_CS_PIN, 1);
 }
 
-void epd_send_data(uint8_t data){
-    gpio_put(EPD_DC, 1);
-    gpio_put(EPD_CS, 0);
-    spi_write_blocking(spi0, &data, 1);
-    gpio_put(EPD_CS, 1);
-}
 
 void epd_init(){
     epd_reset();
+
+    // SW Reset
+    spi_ink_write_data(0x12, NULL, 0);
     epd_wait_until_idle();
+    sleep_ms(100);
 
-    epd_send_command(0x12); // Software reset
-    sleep_ms(10);
+    buf[0] = 0x41;
+    buf[1] = 0x00;
+    buf[2] = 0x32;
+    spi_ink_write_data(0x04, buf, 3);  // Source voltage
 
-    epd_send_command(0x01);  // Driver output control
-    // Display's height
-    uint16_t m = HEIGHT - 1;
-    uint8_t mux_lsb =  m & 0xFF;
-    uint8_t mux_msb = (m >> 8) & 0x01;
-    epd_send_data(mux_lsb);
-    epd_send_data(mux_msb);
-    epd_send_data(0x00);     // Default input direction
+    // Set gate driver output
+    buf[0] = HEIGHT - 1;
+    buf[1] = (HEIGHT + 1) >> 8;
+    buf[2] = 0x00;
+    spi_ink_write_data(0x01, buf, 1);
 
-    epd_send_command(0x11);  // Data entry mode
-    epd_send_data(0x03);     // Y increment, X increment
+    buf[0] = 0xF7;
+    spi_ink_write_data(0x22, buf, 1);
+    spi_ink_write_data(0x20, NULL, 0);
 
-//  Resolution (for 250x122 e-ink)
-    epd_send_command(0x44);  // Set RAM X adress
-    epd_send_data(0x00);     // XStart = 0
-    epd_send_data(0x1F);     // XEnd = 31 (width - 1 / 8)
+    //Set panel border
+    buf[0] = 0x05;
+    spi_ink_write_data(0x3C, buf, 1);
 
-    epd_send_command(0x45);  // Set RAM Y adress
-    epd_send_data(0x00);     // YStart = 0
-    epd_send_data(0x00);     // 8th byte = 0
-    epd_send_data(0x79);     // YEnd = 121
-    epd_send_data(0x00);     // 8th byte = 0
-
-    epd_send_command(0x3C);  // Border Waveform Control (Panel border)
-    epd_send_data(0x01);     // simplest waveform
-    
-//  Load waveform LUT
-    epd_send_command(0x18);  // Temperature sensor control
-    epd_send_data(0x80);     // Use internal sensor
-    sleep_ms(2);             // Let the measurement stabilise
-
-    epd_send_command(0x22);  // Display Update Control
-    epd_send_data(0xB1);     // Load LUT from OTP
-
-    epd_send_command(0x20);  // Execute Display Update Sequence
-    epd_wait_until_idle();   // Wait until finished
+    buf[0] = 0x78;
+    spi_ink_write_data(0x2C, buf, 1);
 }
 
 
 void epd_display_image(const uint8_t *framebuf){
-    uint16_t bytes_per_line = (WIDTH+7)/8;
 
     // Set RAM pointers to 0
+    buf[0] = 0x00;
+    buf[1] = 0x00;
+    spi_ink_write_data(0x4E, buf, 1);     // Set RAM X adress
+    
 
-    epd_send_command(0x4E); // Set RAM X adress
-    epd_send_data(0x00);
+    spi_ink_write_data(0x4F, buf, 2);     // Set RAM Y adress
 
-    epd_send_command(0x4F); // Set RAM Y adress
-    epd_send_data(0x00);
-    epd_send_data(0x00);    // 8th byte
-
-    epd_send_command(0x24);  // Write to RAM (Black & White only)    
-
-    for(uint16_t y = 0; y < HEIGHT ; y++){
-        for(uint16_t x = 0; x < bytes_per_line; x++){
-            epd_send_data(framebuf[y * bytes_per_line + x]);
-        }
-    }  
+    memcpy(buf, framebuf, 4000);
+    uint16_t size = (WIDTH*HEIGHT)/8;
+    spi_ink_write_data(0x24, buf, size);  // Write to RAM (Black & White only)    
     sleep_ms(10);
-  
-    epd_send_command(0x0C); //Softstart
-    epd_send_data(0xD7);    // Gate driving voltage
-    epd_send_data(0xD6);    // Source driving voltage
-    epd_send_data(0x9D);    // VCOM voltage
-    epd_send_data(0x00);    // Optionally: softstart timing control (zależnie od modułu)
 
 
     //Update the display
-    epd_send_command(0x22); // Display Update Control
-    epd_send_data(0xC7);    // Full update
-    epd_send_command(0x20); // Master activation
+    buf[0] = 0xF7; // Full refresh
+    spi_ink_write_data(0x22, buf, 1);
+    spi_ink_write_data(0x20, NULL, 0);
+
     epd_wait_until_idle();
 }
-

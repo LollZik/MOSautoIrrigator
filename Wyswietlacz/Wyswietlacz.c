@@ -11,12 +11,22 @@
 #include "lwip/ip_addr.h"
 #include "lwip/pbuf.h"
 
-#define EINK_CS 17
-#define EINK_DC 16
-#define EINK_RST 15
-#define EINK_BUSY 14 
+#ifdef CYW43_WL_GPIO_LED_PIN
+#include "pico/cyw43_arch.h"
+#endif
 
-#define WIFI_SSID "PicoNet"
+#define SPI_RX_PIN      16
+#define SPI_SCK_PIN     18
+#define SPI_TX_PIN      19
+
+#define DC_PIN          20
+#define RST_PIN         21
+#define BUSY_PIN        22
+#define EN_PIN          26
+#define SRAM_CS_PIN     27
+#define EINK_CS_PIN     17
+
+#define WIFI_SSID     "PicoNet"
 #define WIFI_PASSWORD "MosKonewka"
 #define LISTEN_PORT 12345
 #define MAX_MSG_LEN 32
@@ -26,8 +36,15 @@
 #define BUTTON_DEBOUNCE_MS 50
 #define BUZZ_DUTY_PC 50
 #define BUZZ_TIME_MS 10000
+#define PWM_WRAP 1249
 
 static struct udp_pcb *udp_server;
+
+static volatile bool new_data_received = false;
+static volatile bool data_error = false;
+static volatile int moisture = 0;
+static volatile bool valve_state = false;
+
 
 static volatile bool buzzer_active = false;
 static volatile uint32_t buzzer_end_ms = 0;
@@ -35,24 +52,52 @@ static volatile uint32_t buzzer_end_ms = 0;
 
 // =============== E-ink =============================
 void eink_init(){
-    spi_init(spi0, 2 * 1000 * 1000);
-    gpio_set_function(18, GPIO_FUNC_SPI); // SCK
-    gpio_set_function(19, GPIO_FUNC_SPI); // MOSI
-    gpio_set_function(EINK_DC, GPIO_FUNC_SIO);
-    gpio_set_function(EINK_CS, GPIO_FUNC_SIO);
-    gpio_set_function(EINK_RST, GPIO_FUNC_SIO);
-    gpio_set_function(EINK_BUSY, GPIO_FUNC_SIO);
+    spi_init(spi0, 10*1000*1000);
 
-    gpio_set_dir(EINK_DC, GPIO_OUT);
-    gpio_set_dir(EINK_CS, GPIO_OUT);
-    gpio_set_dir(EINK_RST, GPIO_OUT);
-    gpio_set_dir(EINK_BUSY, GPIO_IN);
+    gpio_init(EINK_CS_PIN);
+    gpio_set_dir(EINK_CS_PIN, GPIO_OUT);
+    gpio_put(EINK_CS_PIN, 1);
+
+    gpio_init(DC_PIN);
+    gpio_set_dir(DC_PIN, GPIO_OUT);
+    gpio_put(DC_PIN, 0);
+
+    gpio_init(EN_PIN);
+    gpio_set_dir(EN_PIN, GPIO_OUT);
+    gpio_put(EN_PIN, 1);
+
+    sleep_ms(100);
+
+    gpio_init(RST_PIN);
+    gpio_set_dir(RST_PIN, GPIO_OUT);
+    gpio_put(RST_PIN, 0);
+
+    sleep_ms(20);
+
+    gpio_init(RST_PIN);
+    gpio_set_dir(RST_PIN, GPIO_OUT);
+    gpio_put(RST_PIN, 1);
+
+    sleep_ms(200);
+
+    gpio_init(SRAM_CS_PIN);
+    gpio_set_dir(SRAM_CS_PIN, GPIO_OUT);
+    gpio_put(SRAM_CS_PIN, 1);
+
+    gpio_init(BUSY_PIN);
+    gpio_set_dir(BUSY_PIN, GPIO_IN);
+
+    gpio_set_function(SPI_TX_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(SPI_RX_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(SPI_SCK_PIN, GPIO_FUNC_SPI);
+
+    spi_set_format(spi0, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+
     epd_init();
 }
 
 void generate_text_bitmap(int moisture, bool valve){
     text_renderer_init(); // Clear framebuff first
-
     char line1[32];
     char line2[32];
     snprintf(line1, sizeof(line1), "Moisture: %d", moisture);
@@ -66,12 +111,12 @@ void generate_text_bitmap(int moisture, bool valve){
 
 
 // =============== Buzzer =============================
+static uint slice;
 void buzzer_init(){
     gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
-    uint slice = pwm_gpio_to_slice_num(BUZZER_PIN);
+    slice = pwm_gpio_to_slice_num(BUZZER_PIN);
     
-    uint16_t wrap = 1249;
-    pwm_set_wrap(slice, wrap);
+    pwm_set_wrap(slice, PWM_WRAP);
     pwm_set_clkdiv(slice, 50.0f);
 
     pwm_set_chan_level(slice, pwm_gpio_to_channel(BUZZER_PIN),0);
@@ -86,9 +131,8 @@ void buzzer_start(){
     if(!buzzer_active){
         buzzer_active = true;
         uint slice = pwm_gpio_to_slice_num(BUZZER_PIN);
-        uint16_t wrap = pwm_get_wrap(slice);
 
-        uint32_t level = (wrap+1) * BUZZ_DUTY_PC / 100;
+        uint32_t level = (PWM_WRAP+1) * BUZZ_DUTY_PC / 100;
         pwm_set_chan_level(slice, pwm_gpio_to_channel(BUZZER_PIN), level);
         pwm_set_enabled(slice, true);
     }
@@ -146,16 +190,18 @@ bool setup_wifi(){
         printf("Wifi initialization error\n");
         return false;
     }
-    cyw43_arch_enable_sta_mode();
-    if(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID,WIFI_PASSWORD,CYW43_AUTH_WPA2_AES_PSK,30000)){
-        printf("Connection failed\n");
-        return false;
-    }
-    printf("Connected\n");
+    cyw43_arch_enable_ap_mode(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK);
+    struct netif *n = &cyw43_state.netif[CYW43_ITF_AP];
+    
+    ip4_addr_t ip, netmask, gw;
+    IP4_ADDR(&ip, 192, 168, 4, 1);
+    IP4_ADDR(&netmask, 255, 255, 255, 0);
+    IP4_ADDR(&gw, 192, 168, 4, 1);
+
+    netif_set_addr(n, &ip, &netmask, &gw);
+    netif_set_up(n);
     return true;
 }
-
-
 
 static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port){
     char buf[MAX_MSG_LEN+1];
@@ -163,21 +209,18 @@ static void udp_receive_callback(void *arg, struct udp_pcb *pcb, struct pbuf *p,
     memcpy(buf, p->payload, len);
     buf[len]='\0';
 
-    int moisture = 0;
-    int valve_state = 0;
-    if(sscanf(buf, "%d,%d", &moisture, &valve_state) == 2){
-        generate_text_bitmap(moisture, valve_state != 0);
-
-        if(valve_state){
-            buzzer_start();
-        }
-
+    int temp_moisture = 0;
+    int temp_valve_state = 0;
+    if(sscanf(buf, "%d,%d", &temp_moisture, &temp_valve_state) == 2){
+        moisture = temp_moisture;
+        valve_state = temp_valve_state;
+        data_error = false;
+        new_data_received = true;
     }
     else{
-        text_renderer_init();
-        draw_string(0,0,"Error");
+        data_error = true;
+        new_data_received = true;
     }
-
     pbuf_free(p);
 }
 
@@ -209,9 +252,24 @@ int main(){
 
     while (true){
        // Messages received via UDP are handled automatically because of 
-       // threadsafe_background mode, and e-ink is automatically updated
-       // inside the udp_receive_callback function,
-       // therefore while true loop only needs to handle the buzzer
+       // threadsafe_background mode, we only need to check the values of
+       // static values callback changes and act accordingly
+
+       if(new_data_received){
+        new_data_received = false;
+        if(!data_error){
+            generate_text_bitmap(moisture, valve_state != 0);
+
+            if(valve_state){
+                buzzer_start();
+            }
+        }
+        else{
+            text_renderer_init();
+            draw_string(0,0,"Error");
+            epd_display_image(framebuf);
+        }
+       }
 
         if(buzzer_active){ 
             uint32_t now = (uint32_t) (time_us_64()/1000UL);
@@ -228,5 +286,6 @@ int main(){
         }
         sleep_ms(10); // Slight delay so as not to overload the system
     }
+
     return 0;
 }

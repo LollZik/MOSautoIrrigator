@@ -10,23 +10,23 @@
 
 // SPI
 #define SPI_PORT        spi0
-#define PIN_CS          4
-#define PIN_MOSI        5
-#define PIN_MISO        6
-#define PIN_SCK         7
+#define PIN_MOSI        3
+#define PIN_MISO        4
+#define PIN_CS          5
+#define PIN_SCK         6
 
 
-//Watering
+// Watering
 #define VALVE_PIN 7
 #define MOISTURE_THRESHOLD 500 //0-4095
 #define WATERING_TIME 1000
 #define SLEEP_TIME 1800000 // 30 min
 
 
-//Wifi settings
+// Wifi settings
 #define WIFI_SSID "PicoNet"
 #define WIFI_PASSWORD "MosKonewka"
-#define DEST_IP "192.168.1.100"
+#define DEST_IP "192.168.4.1"
 #define DEST_PORT 12345
 
 static struct udp_pcb *udp_client;
@@ -65,11 +65,17 @@ bool setup_wifi(){
         return false;
     }
     cyw43_arch_enable_sta_mode();
-    if(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID,WIFI_PASSWORD,CYW43_AUTH_WPA2_AES_PSK,30000)){
-        printf("Connection failed\n");
-        return false;
-    }
-    printf("Connected\n");
+    
+    struct netif *n = &cyw43_state.netif[CYW43_ITF_STA];
+    ip4_addr_t ip, netmask, gw;
+    
+    IP4_ADDR(&ip, 192, 168, 4, 2);      // Nasze IP
+    IP4_ADDR(&netmask, 255, 255, 255, 0);
+    IP4_ADDR(&gw, 192, 168, 4, 1);
+
+    netif_set_addr(n, &ip, &netmask, &gw);
+    netif_set_up(n);
+
     return true;
 }
 
@@ -79,9 +85,9 @@ int read_moisture(){
 
 bool watering_controls(int moisture){
     if(moisture < MOISTURE_THRESHOLD){
-        gpio_put(VALVE_PIN,1);
+        gpio_put(VALVE_PIN, 1);
         sleep_ms(WATERING_TIME);
-        gpio_put(VALVE_PIN,0);
+        gpio_put(VALVE_PIN, 0);
         return true;
     }
     return false;
