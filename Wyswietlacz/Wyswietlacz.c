@@ -40,10 +40,10 @@
 
 static struct udp_pcb *udp_server;
 
-static volatile bool new_data_received = false;
+static volatile bool new_data_received = true;
 static volatile bool data_error = false;
 static volatile int moisture = 0;
-static volatile bool valve_state = false;
+static volatile bool valve_state = true;
 
 
 static volatile bool buzzer_active = false;
@@ -102,8 +102,8 @@ void generate_text_bitmap(int moisture, bool valve){
     char line2[32];
     snprintf(line1, sizeof(line1), "Moisture: %d", moisture);
     snprintf(line2, sizeof(line2),"Valve: %s", valve ? "ON" : "OFF");
-    draw_string(0,0, line1);
-    draw_string(0, 10, line2);
+    draw_string(10,40, line1);
+    draw_string(10, 60, line2);
     draw_logo();
     epd_display_image(framebuf);
 }
@@ -250,6 +250,14 @@ int main(){
     buzzer_init();
     button_init();
 
+    
+    buzzer_start();
+    sleep_ms(1000);
+    stop_buzzer();
+
+    generate_text_bitmap(9999, true);
+    epd_display_image(framebuf);
+
     while (true){
        // Messages received via UDP are handled automatically because of 
        // threadsafe_background mode, we only need to check the values of
@@ -258,7 +266,7 @@ int main(){
        if(new_data_received){
         new_data_received = false;
         if(!data_error){
-            generate_text_bitmap(moisture, valve_state != 0);
+            generate_text_bitmap(moisture, valve_state);
 
             if(valve_state){
                 buzzer_start();

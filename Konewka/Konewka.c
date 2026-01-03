@@ -8,19 +8,25 @@
 #include "lwip/udp.h"
 #include "lwip/ip_addr.h"
 
-// SPI
+
+#define SLEEP_TIME 1800000 // 30min
+
+// ADC
 #define SPI_PORT        spi0
+#define PIN_SCK         2
 #define PIN_MOSI        3
 #define PIN_MISO        4
 #define PIN_CS          5
-#define PIN_SCK         6
 
+// MUX
+#define MUX_ADDR_A 6
+#define MUX_ADDR_B 7
+#define MUX_ADDR_C 8
+#define MUX_INH    9
 
 // Watering
-#define VALVE_PIN 7
-#define MOISTURE_THRESHOLD 500 //0-4095
-#define WATERING_TIME 1000
-#define SLEEP_TIME 1800000 // 30 min
+#define MOISTURE_THRESHOLD 800 //0-4095
+#define WATERING_TIME 2000
 
 
 // Wifi settings
@@ -33,8 +39,10 @@ static struct udp_pcb *udp_client;
 static ip_addr_t dest_addr;
 
 
-void setup_adc(){ // Project uses external ADC, communitacion via SPI
-    spi_init(SPI_PORT, 2 * 1000 * 1000); // 2MHz
+// ==================== ADC & MUX ====================
+
+void setup_adc(){ // External ADC, communitacion via SPI
+    spi_init(SPI_PORT, 1000 * 1000); // 1 MHz
     gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
     gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
@@ -44,7 +52,22 @@ void setup_adc(){ // Project uses external ADC, communitacion via SPI
     gpio_put(PIN_CS, 1);
 }
 
-int read_adc(uint8_t channel){
+void setup_mux(){
+    gpio_init(MUX_ADDR_A);
+    gpio_set_dir(MUX_ADDR_A, GPIO_OUT);
+
+    gpio_init(MUX_ADDR_B);
+    gpio_set_dir(MUX_ADDR_B, GPIO_OUT);
+
+    gpio_init(MUX_ADDR_C);
+    gpio_set_dir(MUX_ADDR_C, GPIO_OUT);
+    
+    gpio_init(MUX_INH);    
+    gpio_set_dir(MUX_INH, GPIO_OUT);
+    gpio_put(MUX_INH, 1);
+}
+
+int read_adc(uint8_t channel){ // MCP3008
         uint8_t tx[3] = {
             0x01, // Start bit
             (uint8_t)(0x80 | ((channel & 0x07) << 4)), // Single-ended mode + channel selection
@@ -59,9 +82,37 @@ int read_adc(uint8_t channel){
         return ((rx[1] & 0x03) << 8) | rx[2];
 }
 
+int read_moisture(){
+    long sum = 0;
+    const int samples = 10;
+
+    for(int i=0; i<samples; i++){
+        sum += read_adc(0);
+        sleep_ms(2);
+    }
+
+    return (uint16_t)(sum / samples);
+}
+
+void activate_pump(uint8_t channel_id) {
+    if (channel_id > 7) return; 
+
+    gpio_put(MUX_ADDR_A, (channel_id & 0x01));
+    gpio_put(MUX_ADDR_B, (channel_id & 0x02));
+    gpio_put(MUX_ADDR_C, (channel_id & 0x04));
+
+    gpio_put(MUX_INH, 0);
+    return;
+}
+
+void stop_all_pumps() {
+    gpio_put(MUX_INH, 1);
+}
+
+// ==================== WI-FI ====================
+
 bool setup_wifi(){
     if(cyw43_arch_init_with_country(CYW43_COUNTRY_POLAND)){
-        printf("Initialization error\n");
         return false;
     }
     cyw43_arch_enable_sta_mode();
@@ -69,31 +120,22 @@ bool setup_wifi(){
     struct netif *n = &cyw43_state.netif[CYW43_ITF_STA];
     ip4_addr_t ip, netmask, gw;
     
-    IP4_ADDR(&ip, 192, 168, 4, 2);      // Nasze IP
+    IP4_ADDR(&ip, 192, 168, 4, 2);
     IP4_ADDR(&netmask, 255, 255, 255, 0);
     IP4_ADDR(&gw, 192, 168, 4, 1);
 
     netif_set_addr(n, &ip, &netmask, &gw);
     netif_set_up(n);
 
+    if(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID,WIFI_PASSWORD,CYW43_AUTH_WPA2_AES_PSK,30000)){
+        return false;
+    }
+    
     return true;
 }
 
-int read_moisture(){
-    return (int)read_adc(0);
-}
-
-bool watering_controls(int moisture){
-    if(moisture < MOISTURE_THRESHOLD){
-        gpio_put(VALVE_PIN, 1);
-        sleep_ms(WATERING_TIME);
-        gpio_put(VALVE_PIN, 0);
-        return true;
-    }
-    return false;
-}
-
 void send_udp_data(int moisture, int valve_state){
+    if (!udp_client) return;
     char msg[32];
     int len = snprintf(msg, sizeof(msg),"%d,%d", moisture, valve_state);
 
@@ -107,27 +149,40 @@ void send_udp_data(int moisture, int valve_state){
 
 int main(){
     stdio_init_all();
-    setup_adc();
+    sleep_ms(2000);
 
-    gpio_init(VALVE_PIN);
-    gpio_set_dir(VALVE_PIN, GPIO_OUT);
-    gpio_put(VALVE_PIN,0); //Closed by default
+    setup_adc();
+    setup_mux();
 
     if(!setup_wifi()){
+        while(true){
+             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1); sleep_ms(200);
+             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0); sleep_ms(200);
+        }
         return -1;
     }
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+
 
     udp_client = udp_new();
-    if(!udp_client){
-        printf("UDP initialization error\n");
-        return -1;
-    }
     ipaddr_aton(DEST_IP, &dest_addr);
 
     while (true) {
-        int moisture = read_moisture();
-        int valve_state = watering_controls(moisture);
-        send_udp_data(moisture, valve_state);
+        uint16_t moisture = read_moisture();
+        bool valve_active = false;
+
+        if(moisture < MOISTURE_THRESHOLD) { 
+            activate_pump(0); // Select pump channel (0-7) connected to MUX
+            valve_active = true;
+            sleep_ms(WATERING_TIME);
+            stop_all_pumps();
+        }
+        else{
+            stop_all_pumps();
+            valve_active = false;
+        }
+        send_udp_data(moisture, valve_active ? 1 : 0);
+
         sleep_ms(SLEEP_TIME);
     }
     return 0;
