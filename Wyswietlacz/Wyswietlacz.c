@@ -246,17 +246,8 @@ int main(){
         return -1;
     }
     eink_init();
-
     buzzer_init();
     button_init();
-
-    
-    buzzer_start();
-    sleep_ms(1000);
-    stop_buzzer();
-
-    generate_text_bitmap(9999, true);
-    epd_display_image(framebuf);
 
     while (true){
        // Messages received via UDP are handled automatically because of 
