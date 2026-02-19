@@ -27,7 +27,7 @@ project(Konewka C CXX ASM)
 
 pico_sdk_init()
 
-add_executable(Konewka Konewka.c )
+add_executable(Konewka app_konewka.c bsp_konewka.c)
 
 pico_set_program_name(Konewka "Konewka")
 pico_set_program_version(Konewka "0.1")

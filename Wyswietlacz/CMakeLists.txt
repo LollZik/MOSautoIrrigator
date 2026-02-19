@@ -33,7 +33,8 @@ pico_sdk_init()
 
 # Main program
 add_executable(Wyswietlacz
-    Wyswietlacz.c
+    app_display.c
+    bsp_display.c
     ssd1680.c
     text_renderer.c
 )
