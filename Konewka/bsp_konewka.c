@@ -14,7 +14,6 @@
 static struct udp_pcb *udp_client;
 static ip_addr_t dest_addr;
 
-
 void bsp_init(void) {
     stdio_init_all();
 

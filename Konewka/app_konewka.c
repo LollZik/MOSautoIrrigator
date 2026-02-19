@@ -6,11 +6,10 @@ static bool is_charging = false;
 static bool valve_active = false;
 static uint8_t battery_percent = 0;
 
-void task_read_sensors(void) {
-    current_moisture = bsp_read_moisture(0);
+void task_read_sensors(uint8_t channel_id) {
+    current_moisture = bsp_read_moisture(channel_id);
     is_charging = bsp_is_battery_charging();
 }
-
 
 void task_watering_logic(void) {
     if (current_moisture < MOISTURE_THRESHOLD) {
@@ -25,7 +24,6 @@ void task_watering_logic(void) {
         valve_active = false;
     }
 }
-
 
 void task_network_send(void) {
     bsp_send_message(current_moisture, valve_active, is_charging);
